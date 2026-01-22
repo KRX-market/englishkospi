@@ -34,7 +34,7 @@ def load_kospi_format_data():
 @st.cache_data
 def load_kospi_company_data():
     try:
-        df = pd.read_csv("kospi_company.csv", dtype=str)
+        df = pd.read_csv("kospi_company.csv", dtype=str, encoding='cp949')
         return df
     except Exception as e:
         st.error(f"회사 데이터 로드 오류: {e}")
@@ -44,7 +44,7 @@ def load_kospi_company_data():
 # 데이터 로드
 df_svc = load_kospi_format_data()
 df_listed = load_kospi_company_data()
-df_listed['회사코드'] = df_listed['회사코드'].astype(str).str.zfill(5)
+df_listed['회사코드'] = df_listed['회사코드'].astype(str).str.zfill(5) + '0'
 
 # 2개의 칼럼 생성 (업로드 섹션 제거)
 col1, col2 = st.columns(2)
