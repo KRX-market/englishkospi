@@ -44,7 +44,7 @@ def load_kospi_company_data():
 # 데이터 로드
 df_svc = load_kospi_format_data()
 df_listed = load_kospi_company_data()
-df_listed['회사코드'] = df_listed['회사코드'].astype(str).str.zfill(5)
+df_listed['회사코드'] = df_listed['회사코드'].astype(str).str.zfill(6)
 
 # 2개의 칼럼 생성 (업로드 섹션 제거)
 col1, col2 = st.columns(2)
