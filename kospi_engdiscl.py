@@ -122,11 +122,13 @@ if st.button('코스피 영문공시 지원대상 공시조회'):
                 "searchCorpName": "",
                 "copyUrl": ""
             }
-
+headers = {"User-Agent": "Mozilla/5.0"} # 추가
             try:
-                response = requests.post(url, params=params)
+                # headers=headers 추가
+                response = requests.post(url, params=params, headers=headers) 
                 response.raise_for_status()
                 return BeautifulSoup(response.text, 'html.parser')
+                
             except Exception as e:
                 st.error(f"페이지 {page_num} 요청 중 오류 발생: {e}")
                 return None
@@ -210,15 +212,28 @@ if st.button('코스피 영문공시 지원대상 공시조회'):
             "copyUrl": ""
         }
 
-        response = requests.post(url, params=params)
+headers = {"User-Agent": "Mozilla/5.0"} # 추가
+        response = requests.post(url, params=params, headers=headers) # headers 추가
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # 총 건수와 페이지 수 추출
-        total_items_element = soup.select_one('.info.type-00 em')
-        total_pages_text = soup.select_one('.info.type-00').text.strip()
-        total_pages_match = re.search(r'(\d+)/(\d+)', total_pages_text)
-
-        if total_items_element and total_pages_match:
+        # 단계별로 안전하게 추출
+        info_element = soup.select_one('.info.type-00')
+        
+        if info_element:
+            total_items_element = info_element.select_one('em')
+            total_pages_text = info_element.text.strip()
+            total_pages_match = re.search(r'(\d+)/(\d+)', total_pages_text)
+            
+            if total_items_element and total_pages_match:
+                total_items = int(total_items_element.text.strip().replace(",",""))
+                total_pages = int(total_pages_match.group(2))
+                st.info(f"조회일에 총 {total_items}건의 공시가 있습니다. (총 {total_pages}페이지)    지원대상 공시는 아래 표를 참고해주세요.")
+            else:
+                total_pages = 1
+        else:
+            # 요소를 찾지 못했을 때 경고 메시지 출력 후 안전하게 1페이지로 설정
+            st.warning("공시 페이지 정보를 읽어올 수 없습니다. (데이터가 없거나 차단됨)")
+            total_pages = 1
             total_items = int(total_items_element.text.strip().replace(",",""))
             total_pages = int(total_pages_match.group(2))
             
