@@ -333,3 +333,28 @@ if st.button('🚀 영문공시 지원대상 필터링 실행'):
                 else:
 
                     st.info("오늘 현재까지 지원 대상에 해당하는 공시는 없습니다.")
+
+import streamlit as st
+# ... (기타 임포트 생략)
+
+# 1. 페이지 설정
+st.set_page_config(page_title="코스피 영문공시 필터링 도구", layout="wide")
+
+# --- [추가된 부분] 사이드바 공지사항 ---
+with st.sidebar:
+    st.header("📢 공지사항")
+    st.warning(
+        """
+        **해당 사이트 오류로 인해 새로운 사이트를 개설하였습니다.** 앞으로 아래 사이트를 이용 부탁드립니다.
+        
+        * [신규 사이트 1](https://englishkind.streamlit.app/)
+        * [신규 사이트 2](https://english-kospi.streamlit.app/)
+        """
+    )
+    st.markdown("---")
+# ------------------------------------
+
+st.title('🎯 오늘의 코스피 번역대상 공시 조회')
+st.markdown("---")
+
+# ... (이하 기존 코드 동일)
