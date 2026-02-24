@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import requests
@@ -10,7 +11,7 @@ import random
 # 1. 페이지 설정
 st.set_page_config(page_title="코스피 영문공시 필터링 도구", layout="wide")
 
-# --- [수정] 사이드바 공지사항 (주목도 업그레이드) ---
+# --- 사이드바 공지사항 (유지) ---
 with st.sidebar:
     st.markdown("## 🚨 중요 공지")
     st.warning(
@@ -25,7 +26,6 @@ with st.sidebar:
         """
     )
     st.markdown("---")
-# ------------------------------------------
 
 st.title('🎯 오늘의 코스피 번역대상 공시 조회')
 st.markdown("---")
@@ -38,7 +38,8 @@ def load_reference_data():
         df_listed = pd.read_csv("kospi_company.csv", dtype=str)
         
         if not df_listed.empty and '회사코드' in df_listed.columns:
-            df_listed['회사코드'] = df_listed['회사코드'].astype(str).str.zfill(5)
+            # 종목코드는 6자리이므로 zfill(6)으로 수정 권장 (기존 5 유지 시 5로 처리)
+            df_listed['회사코드'] = df_listed['회사코드'].astype(str).str.zfill(6)
             
         return df_svc, df_listed
     except Exception as e:
@@ -65,111 +66,52 @@ else:
 
 st.markdown("---")
 
-# 3. 날짜 설정 및 사용자 입력
+# 3. 날짜 설정
 selected_date = st.date_input("📅 조회일자 선택", value=datetime.today())
 today_str = selected_date.strftime("%Y-%m-%d")
 
-# 4. 크롤링 엔진
+# 4. 크롤링 엔진 (전체 페이지 순회 로직 복원)
 def get_kind_data(date_str):
     main_url = "https://kind.krx.co.kr/disclosure/todaydisclosure.do"
     ajax_url = "https://kind.krx.co.kr/disclosure/todaydisclosure.do"
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        "Accept": "text/html, */*; q=0.01",
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "Origin": "https://kind.krx.co.kr",
-        "Referer": "https://kind.krx.co.kr/disclosure/todaydisclosure.do",
+        "Referer": main_url,
         "X-Requested-With": "XMLHttpRequest"
     }
 
     session = requests.Session()
+    all_rows = []
     
     try:
+        # Step 1: 세션 초기화 및 전체 페이지 수 확인을 위한 1페이지 호출
         session.get(main_url, headers=headers, timeout=10)
-        time.sleep(random.uniform(0.3, 0.7))
-
+        
         payload = {
             "method": "searchTodayDisclosureSub",
             "currentPageSize": 100,
             "pageIndex": 1,
             "orderMode": "0",
-            "orderStat": "D",
+            "orderStat": "D", # 최신순
             "forward": "todaydisclosure_sub",
             "marketType": "1",
             "selDate": date_str
         }
         
-        response = session.post(ajax_url, data=payload, headers=headers, timeout=10)
-        response.raise_for_status()
+        first_resp = session.post(ajax_url, data=payload, headers=headers, timeout=10)
+        soup = BeautifulSoup(first_resp.text, 'html.parser')
         
-        soup = BeautifulSoup(response.text, 'html.parser')
-        rows = []
-        table = soup.find('table', class_='list type-00 mt10')
-        
-        if not table: return pd.DataFrame()
+        # 전체 페이지 수 추출
+        info_text = soup.select_one('.info.type-00')
+        total_pages = 1
+        if info_text:
+            page_match = re.search(r'/(\d+)', info_text.text)
+            if page_match:
+                total_pages = int(page_match.group(1))
 
-        for tr in table.find('tbody').find_all('tr'):
-            tds = tr.find_all('td')
-            if len(tds) < 5 or "결과가 없습니다" in tr.text: continue
-            
-            comp_a = tds[1].find('a')
-            comp_code = ""
-            if comp_a and comp_a.has_attr('onclick'):
-                code_match = re.search(r"companysummary_open\('(\d+)'\)", comp_a['onclick'])
-                if code_match: comp_code = code_match.group(1)
-            
-            title_a = tds[2].find('a')
-            title = title_a.get('title', '').strip() if title_a else ""
-            acpt_no = ""
-            if title_a and title_a.has_attr('onclick'):
-                no_match = re.search(r"openDisclsViewer\('(\d+)'", title_a['onclick'])
-                if no_match: acpt_no = no_match.group(1)
-            
-            rows.append({
-                '시간': tds[0].text.strip(),
-                '회사코드': comp_code,
-                '회사명': tds[1].text.strip(),
-                '공시제목': title,
-                '제출인': tds[3].text.strip(),
-                '상세URL': f"https://kind.krx.co.kr/common/disclsviewer.do?method=search&acptno={acpt_no}" if acpt_no else ""
-            })
-            
-        return pd.DataFrame(rows)
-
-    except Exception as e:
-        st.error(f"❌ KIND 서버 접속 중 오류: {e}")
-        return pd.DataFrame()
-
-# 5. 실행 버튼 및 결과 출력
-if st.button('🚀 영문공시 지원대상 필터링 실행'):
-    if df_svc.empty or df_listed.empty:
-        st.error("기준 데이터가 없어 실행할 수 없습니다.")
-    else:
-        with st.spinner('실시간 공시 데이터를 분석하고 있습니다...'):
-            df_raw = get_kind_data(today_str)
-            
-            if df_raw.empty:
-                st.info("조회된 공시가 없거나 접근이 제한되었습니다. 잠시 후 다시 시도해 주세요.")
-            else:
-                target_forms = df_svc['서식명'].unique().tolist()
-                target_codes = df_listed['회사코드'].tolist()
-
-                def filter_logic(row):
-                    title = row['공시제목']
-                    code = row['회사코드']
-                    if title.startswith(("추가상장", "변경상장")): return False
-                    return any(f in title for f in target_forms) and (code in target_codes)
-
-                final_df = df_raw[df_raw.apply(filter_logic, axis=1)]
-
-                st.subheader(f"📊 필터링 결과 (대상: {len(final_df)}건)")
-                if not final_df.empty:
-                    st.dataframe(
-                        final_df[['시간', '회사명', '공시제목', '제출인', '상세URL']],
-                        column_config={"상세URL": st.column_config.LinkColumn("공시보기")},
-                        hide_index=True,
-                        use_container_width=True
-                    )
-                else:
-                    st.info("오늘 현재까지 지원 대상에 해당하는 공시는 없습니다.")
+        # Step 2: 모든 페이지 순회 (오전 데이터 누락 방지 핵심)
+        progress_bar = st.progress(0)
+        for page in range(1, total_pages + 1):
+            payload["pageIndex"] = page
+            resp =
